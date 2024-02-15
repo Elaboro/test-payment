@@ -7,7 +7,7 @@ export interface IPaymentHistory {
   timestamp: Date;
 }
 
-export const enum PaymentAction {
+export enum PaymentAction {
   EXPENSE = "EXPENSE",
   INCOME = "INCOME",
 };
