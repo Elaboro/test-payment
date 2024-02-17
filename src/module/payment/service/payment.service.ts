@@ -13,7 +13,7 @@ export class PaymentService {
     return this.paymentRepository.addBalance(topUpBalanceDto);
   }
 
-  buyItem(buyItemDto: BuyItemDto) {
+  async buyItem(buyItemDto: BuyItemDto) {
     return this.paymentRepository.takeAwayBalance(buyItemDto);
   }
 }
