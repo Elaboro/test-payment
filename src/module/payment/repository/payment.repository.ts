@@ -6,6 +6,7 @@ import { BuyItemDto } from "../dto/buy-item.dto";
 import { TopUpBalanceDto } from "../dto/top-up-balance.dto";
 import { PaymentHistoryEntity } from "../entity/payment-history.entity";
 import { PaymentAction } from "../interface";
+import { calculateBalanceByUserId } from "../sql/paymant.sql";
 
 @Injectable()
 export class PaymentRepository {
@@ -32,27 +33,12 @@ export class PaymentRepository {
         payment_history.user_id = user_id;
         await transactionManager.save(PaymentHistoryEntity, payment_history);
 
-        const qb_payment_history = transactionManager.createQueryBuilder().from(PaymentHistoryEntity, "t");
+        const qb_payment_history = transactionManager.createQueryBuilder();
+        qb_payment_history.from(PaymentHistoryEntity, "t");
         qb_payment_history.setLock("pessimistic_read");
         qb_payment_history.where("t.user_id = :user_id", { user_id });
 
-        const [{ balance }] = await transactionManager.query<{
-          user_id: string,
-          balance: number,
-        }[]>(`
-          select
-            user_id,
-            SUM(
-              case 
-                when "action" = 'INCOME' then amount
-                when "action" = 'EXPENSE' then -amount 
-              end
-            ) as balance
-          from public.payment_history ph
-          where ph.user_id = $1
-          group by user_id
-        `, [user_id]);
-
+        const [{ balance }] = await calculateBalanceByUserId(transactionManager, [user_id]);
         user.balance = balance;
 
         await transactionManager.save(UserEntity, user);
@@ -65,7 +51,8 @@ export class PaymentRepository {
   async takeAwayBalance({ user_id, amount }: BuyItemDto) {
     await this.paymentHistoryRepository.manager.transaction(
       async (transactionManager) => {
-        const qb_user = transactionManager.createQueryBuilder().from(UserEntity, "t");
+        const qb_user = transactionManager.createQueryBuilder();
+        qb_user.from(UserEntity, "t");
         qb_user.setLock("pessimistic_write");
         qb_user.where("t.user_id = :user_id", { user_id });
         const user = await qb_user.getRawOne<UserEntity>();
@@ -88,23 +75,7 @@ export class PaymentRepository {
         payment_history.user_id = user_id;
         await transactionManager.save(PaymentHistoryEntity, payment_history);
 
-        const [{ balance }] = await transactionManager.query<{
-          user_id: string,
-          balance: number,
-        }[]>(`
-          select
-            user_id,
-            SUM(
-              case 
-                when "action" = 'INCOME' then amount
-                when "action" = 'EXPENSE' then -amount 
-              end
-            ) as balance
-          from public.payment_history ph
-          where ph.user_id = $1
-          group by user_id
-        `, [user_id]);
-
+        const [{ balance }] = await calculateBalanceByUserId(transactionManager, [user_id]);
         user.balance = balance;
 
         await transactionManager.save(UserEntity, user);
